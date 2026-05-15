@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}NewsHub{% endblock %}</title>
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="NewsHub">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <link rel="manifest" href="/static/manifest.json">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a; --bg-secondary: #1e293b; --bg-card: #1e293b;
+            --text-primary: #e2e8f0; --text-secondary: #94a3b8; --text-muted: #64748b;
+            --border: #334155; --accent: #3b82f6;
+        }
+        .light {
+            --bg-primary: #f8fafc; --bg-secondary: #ffffff; --bg-card: #ffffff;
+            --text-primary: #1e293b; --text-secondary: #475569; --text-muted: #94a3b8;
+            --border: #e2e8f0; --accent: #2563eb;
+        }
+        body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; transition: background 0.3s, color 0.3s; }
+        .card { transition: transform 0.2s, box-shadow 0.2s; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+        .badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 9999px; }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+        .bg-slate-800 { background: var(--bg-secondary) !important; }
+        .bg-slate-700 { background: var(--border) !important; }
+        .bg-slate-600 { background: var(--text-muted) !important; }
+        .text-white { color: var(--text-primary) !important; }
+        .text-slate-300 { color: var(--text-secondary) !important; }
+        .text-slate-400 { color: var(--text-secondary) !important; }
+        .text-slate-500 { color: var(--text-muted) !important; }
+        .text-slate-600 { color: var(--text-muted) !important; }
+        .border-slate-700 { border-color: var(--border) !important; }
+        .border-slate-600 { border-color: var(--border) !important; }
+        .border-slate-800 { border-color: var(--border) !important; }
+        .hover\:bg-slate-700:hover { background: var(--border) !important; }
+        .hover\:bg-slate-600:hover { background: var(--text-muted) !important; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Navbar -->
+    <nav class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <!-- 移动端汉堡菜单 -->
+                <button onclick="toggleMobileMenu()" class="md:hidden text-slate-400 hover:text-white p-1" id="menu-toggle">☰</button>
+                <a href="/" class="text-xl font-bold text-white">NewsHub</a>
+                <div class="hidden md:flex items-center gap-1">
+                    <a href="/" class="text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-slate-700">首页</a>
+                    {% if user %}
+                    <a href="/favorites" class="text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-slate-700">我的收藏</a>
+                    <a href="/history" class="text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-slate-700">阅读历史</a>
+                    {% if is_admin %}
+                    <a href="/admin" class="text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-lg hover:bg-slate-700">管理后台</a>
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                {% block search %}{% endblock %}
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleTheme()" id="theme-toggle" class="text-lg px-2 py-1 rounded-lg hover:bg-slate-700" title="切换主题">🌙</button>
+                    {% if user %}
+                    <span class="text-sm text-slate-300">
+                        {{ user.username }}
+                        <button onclick="doLogout()" class="text-slate-500 hover:text-white ml-2">退出</button>
+                    </span>
+                    {% else %}
+                    <button onclick="showAuth()" class="text-sm text-slate-400 hover:text-white px-3 py-2">登录</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 移动端下拉菜单 -->
+        <div id="mobile-menu" class="hidden md:hidden border-t border-slate-700 px-4 py-3">
+            <a href="/" class="block text-sm text-slate-400 hover:text-white py-2 px-3 rounded-lg hover:bg-slate-700">首页</a>
+            {% if user %}
+            <a href="/favorites" class="block text-sm text-slate-400 hover:text-white py-2 px-3 rounded-lg hover:bg-slate-700">我的收藏</a>
+            <a href="/history" class="block text-sm text-slate-400 hover:text-white py-2 px-3 rounded-lg hover:bg-slate-700">阅读历史</a>
+            {% if is_admin %}
+            <a href="/admin" class="block text-sm text-slate-400 hover:text-white py-2 px-3 rounded-lg hover:bg-slate-700">管理后台</a>
+            {% endif %}
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+        <div class="bg-slate-800 rounded-xl p-6 w-80">
+            <div id="login-form">
+                <h3 class="text-white text-lg font-bold mb-4">登录</h3>
+                <p id="login-msg" class="text-sm mb-3 hidden"></p>
+                <input id="login-username" type="text" placeholder="用户名" class="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 mb-3 focus:outline-none focus:border-blue-500">
+                <input id="login-password" type="password" placeholder="密码" class="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 mb-4 focus:outline-none focus:border-blue-500">
+                <button onclick="doLogin()" id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg mb-3">登录</button>
+                <p class="text-center text-slate-400 text-sm">没有账号？<button onclick="toggleAuthForm('register')" class="text-blue-400 hover:underline">去注册</button></p>
+            </div>
+            <div id="register-form" class="hidden">
+                <h3 class="text-white text-lg font-bold mb-4">注册</h3>
+                <p id="register-msg" class="text-sm mb-3 hidden"></p>
+                <input id="reg-username" type="text" placeholder="用户名" class="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 mb-3 focus:outline-none focus:border-blue-500">
+                <input id="reg-password" type="password" placeholder="密码（至少6位）" class="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 mb-3 focus:outline-none focus:border-blue-500">
+                <input id="reg-confirm" type="password" placeholder="确认密码" class="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 mb-4 focus:outline-none focus:border-blue-500">
+                <button onclick="doRegister()" id="reg-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg mb-3">注册</button>
+                <p class="text-center text-slate-400 text-sm">已有账号？<button onclick="toggleAuthForm('login')" class="text-blue-400 hover:underline">去登录</button></p>
+            </div>
+            <button onclick="hideAuth()" class="w-full text-slate-500 hover:text-white text-sm mt-3">取消</button>
+        </div>
+    </div>
+
+    {% block content %}{% endblock %}
+
+    <footer class="text-center py-6 text-slate-600 text-sm border-t border-slate-800 mt-8">
+        NewsHub 全球新闻聚合
+    </footer>
+
+    <script>
+    function toggleMobileMenu() {
+        var menu = document.getElementById('mobile-menu');
+        menu.classList.toggle('hidden');
+    }
+    function toggleTheme() {
+        var isLight = document.documentElement.classList.toggle('light');
+        localStorage.setItem('newshub_theme', isLight ? 'light' : 'dark');
+        document.getElementById('theme-toggle').textContent = isLight ? '☀️' : '🌙';
+    }
+    (function loadTheme() {
+        if (localStorage.getItem('newshub_theme') === 'light') {
+            document.documentElement.classList.add('light');
+            document.addEventListener('DOMContentLoaded', function() {
+                var btn = document.getElementById('theme-toggle');
+                if (btn) btn.textContent = '☀️';
+            });
+        }
+    })();
+
+    function showAuth() { document.getElementById('auth-modal').classList.remove('hidden'); toggleAuthForm('login'); }
+    function hideAuth() { document.getElementById('auth-modal').classList.add('hidden'); clearAuthMsgs(); }
+    function toggleAuthForm(form) {
+        document.getElementById('login-form').classList.toggle('hidden', form !== 'login');
+        document.getElementById('register-form').classList.toggle('hidden', form !== 'register');
+        clearAuthMsgs();
+    }
+    function clearAuthMsgs() {
+        ['login-msg','register-msg'].forEach(function(id) { var el = document.getElementById(id); if(el){el.classList.add('hidden');el.textContent='';} });
+    }
+    function showAuthMsg(id, text, isError) {
+        var el = document.getElementById(id); el.textContent = text;
+        el.className = 'text-sm mb-3 ' + (isError ? 'text-red-400' : 'text-green-400');
+        el.classList.remove('hidden');
+    }
+
+    async function doLogin() {
+        clearAuthMsgs();
+        var username = document.getElementById('login-username').value.trim();
+        var password = document.getElementById('login-password').value;
+        if (!username || !password) { showAuthMsg('login-msg', '请填写用户名和密码', true); return; }
+        var btn = document.getElementById('login-btn'); btn.disabled = true; btn.textContent = '登录中...';
+        try {
+            var resp = await fetch('/api/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'same-origin',
+                body: JSON.stringify({username: username, password: password})
+            });
+            var data = await resp.json();
+            btn.disabled = false; btn.textContent = '登录';
+            if (!resp.ok) { showAuthMsg('login-msg', data.detail || '登录失败', true); return; }
+            window.location.reload();
+        } catch(e) {
+            btn.disabled = false; btn.textContent = '登录';
+            showAuthMsg('login-msg', '网络错误', true);
+        }
+    }
+
+    async function doRegister() {
+        clearAuthMsgs();
+        var username = document.getElementById('reg-username').value.trim();
+        var password = document.getElementById('reg-password').value;
+        var confirm = document.getElementById('reg-confirm').value;
+        if (!username) { showAuthMsg('register-msg', '请输入用户名', true); return; }
+        if (password.length < 6) { showAuthMsg('register-msg', '密码至少需要6位', true); return; }
+        if (password !== confirm) { showAuthMsg('register-msg', '两次密码不一致', true); return; }
+        var btn = document.getElementById('reg-btn'); btn.disabled = true; btn.textContent = '注册中...';
+        try {
+            var resp = await fetch('/api/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'same-origin',
+                body: JSON.stringify({username: username, password: password})
+            });
+            var data = await resp.json();
+            btn.disabled = false; btn.textContent = '注册';
+            if (!resp.ok) { showAuthMsg('register-msg', data.detail || '注册失败', true); return; }
+            window.location.reload();
+        } catch(e) {
+            btn.disabled = false; btn.textContent = '注册';
+            showAuthMsg('register-msg', '网络错误', true);
+        }
+    }
+
+    async function doLogout() {
+        await fetch('/api/logout', {method: 'POST', credentials: 'same-origin'});
+        window.location.reload();
+    }
+
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js').catch(function(){}); }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "news-hub",
+  "version": "1.0.0",
+  "description": "",
+  "main": "tunnel.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cloudflared": "^0.7.1"
+  }
+}

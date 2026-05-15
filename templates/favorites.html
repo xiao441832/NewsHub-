@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}我的收藏 - NewsHub{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-6">
+    <!-- 页面标题 -->
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-white">我的收藏</h1>
+        {% if total_count > 0 %}
+        <span class="text-sm text-slate-400">共 {{ total_count }} 篇</span>
+        {% endif %}
+    </div>
+
+    {% if favorites %}
+    <!-- 收藏列表 -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="fav-list">
+        {% for fav in favorites %}
+        <div class="card bg-slate-800 rounded-xl p-4" id="fav-{{ fav.article.id }}">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="badge bg-slate-600 text-slate-200">{{ fav.article.source }}</span>
+                {% set cat_colors = {
+                    "china": "bg-red-900 text-red-300",
+                    "international": "bg-blue-900 text-blue-300",
+                    "finance": "bg-yellow-900 text-yellow-300",
+                    "tech": "bg-purple-900 text-purple-300",
+                    "military": "bg-orange-900 text-orange-300",
+                    "sports": "bg-green-900 text-green-300",
+                    "society": "bg-pink-900 text-pink-300",
+                    "local": "bg-teal-900 text-teal-300",
+                    "other": "bg-gray-700 text-gray-300"
+                } %}
+                <span class="badge {{ cat_colors.get(fav.article.category, 'bg-gray-700 text-gray-300') }}">
+                    {{ categories.get(fav.article.category, '其他') }}
+                </span>
+            </div>
+            <a href="/article/{{ fav.article.id }}" class="block">
+                <h3 class="text-white font-semibold mb-2 hover:text-blue-400 line-clamp-2">{{ fav.article.title }}</h3>
+            </a>
+            <div class="flex items-center justify-between mt-2">
+                <span class="text-xs text-slate-500">收藏于 {{ fav.created_at }}</span>
+                <button onclick="removeFavorite({{ fav.article.id }})" class="text-yellow-400 hover:text-slate-500 text-lg" title="取消收藏">★</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- 分页导航 -->
+    {% if total_pages > 1 %}
+    <div class="flex justify-center items-center gap-1 mt-8">
+        <!-- 上一页 -->
+        {% if page > 1 %}
+        <a href="/favorites?page={{ page - 1 }}" class="px-3 py-2 bg-slate-700 rounded-lg hover:bg-slate-600 text-sm text-slate-300">上一页</a>
+        {% endif %}
+
+        <!-- 页码 -->
+        {% set start_page = [1, page - 2] | max %}
+        {% set end_page = [total_pages, page + 2] | min %}
+
+        {% if start_page > 1 %}
+        <a href="/favorites?page=1" class="px-3 py-2 bg-slate-700 rounded-lg hover:bg-slate-600 text-sm text-slate-300">1</a>
+        {% if start_page > 2 %}
+        <span class="px-2 text-slate-500">...</span>
+        {% endif %}
+        {% endif %}
+
+        {% for p in range(start_page, end_page + 1) %}
+        {% if p == page %}
+        <span class="px-3 py-2 bg-blue-600 rounded-lg text-sm text-white font-medium">{{ p }}</span>
+        {% else %}
+        <a href="/favorites?page={{ p }}" class="px-3 py-2 bg-slate-700 rounded-lg hover:bg-slate-600 text-sm text-slate-300">{{ p }}</a>
+        {% endif %}
+        {% endfor %}
+
+        {% if end_page < total_pages %}
+        {% if end_page < total_pages - 1 %}
+        <span class="px-2 text-slate-500">...</span>
+        {% endif %}
+        <a href="/favorites?page={{ total_pages }}" class="px-3 py-2 bg-slate-700 rounded-lg hover:bg-slate-600 text-sm text-slate-300">{{ total_pages }}</a>
+        {% endif %}
+
+        <!-- 下一页 -->
+        {% if page < total_pages %}
+        <a href="/favorites?page={{ page + 1 }}" class="px-3 py-2 bg-slate-700 rounded-lg hover:bg-slate-600 text-sm text-slate-300">下一页</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <!-- 空状态 -->
+    <div class="text-center py-20 text-slate-500">
+        <p class="text-4xl mb-4">⭐</p>
+        <p class="mb-4">还没有收藏任何文章</p>
+        <a href="/" class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm">去首页看看</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// 取消收藏
+async function removeFavorite(articleId) {
+    if (!confirm('确定取消收藏这篇文章？')) return;
+    try {
+        var resp = await fetch('/api/favorites/' + articleId, {
+            method: 'DELETE',
+            credentials: 'same-origin'
+        });
+        if (resp.ok) {
+            var card = document.getElementById('fav-' + articleId);
+            if (card) {
+                card.style.transition = 'opacity 0.3s';
+                card.style.opacity = '0';
+                setTimeout(function() {
+                    card.remove();
+                    // 检查列表是否已空
+                    var list = document.getElementById('fav-list');
+                    if (list && list.children.length === 0) {
+                        window.location.reload();
+                    }
+                }, 300);
+            }
+        }
+    } catch(e) {
+        alert('操作失败，请稍后重试');
+    }
+}
+</script>
+{% endblock %}

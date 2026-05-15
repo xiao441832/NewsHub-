@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+
+# Database
+data/*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Node
+node_modules/
+package-lock.json
+
+# Cloudflare
+*.pid
+tunnel_url.txt
+cloudflared*.exe
+cloudflared-real.exe
+
+# Secrets
+.env
+*.key
+
+# Other
+.claude/
+PLAN.md
+supabase*

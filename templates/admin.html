@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+
+{% block title %}管理后台 - NewsHub{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-6">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold">📊 管理后台</h1>
+        <button onclick="triggerCrawl()" id="crawl-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">
+            🔄 立即爬取
+        </button>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-slate-800 rounded-xl p-4">
+            <div class="text-slate-400 text-sm">总文章数</div>
+            <div class="text-3xl font-bold text-white">{{ total_articles }}</div>
+        </div>
+        <div class="bg-slate-800 rounded-xl p-4">
+            <div class="text-slate-400 text-sm">启用的新闻源</div>
+            <div class="text-3xl font-bold text-white">{{ total_sources }}</div>
+        </div>
+        <div class="bg-slate-800 rounded-xl p-4">
+            <div class="text-slate-400 text-sm">今日新增</div>
+            <div class="text-3xl font-bold text-green-400">{{ today_total }}</div>
+        </div>
+    </div>
+
+    <!-- 图表区域 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="bg-slate-800 rounded-xl p-4">
+            <h3 class="text-lg font-semibold mb-4">📈 近7天文章趋势</h3>
+            <canvas id="dailyChart" height="200"></canvas>
+        </div>
+        <div class="bg-slate-800 rounded-xl p-4">
+            <h3 class="text-lg font-semibold mb-4">📂 分类分布</h3>
+            <canvas id="categoryChart" height="200"></canvas>
+        </div>
+    </div>
+
+    <!-- 清理统计 -->
+    <div class="bg-slate-800 rounded-xl p-4 mb-6">
+        <h3 class="text-lg font-semibold mb-3">🧹 数据清理状态</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+                <span class="text-slate-400">保留天数：</span>
+                <span class="text-white">{{ cleanup_stats.keep_days }} 天</span>
+            </div>
+            <div>
+                <span class="text-slate-400">已收藏保护：</span>
+                <span class="text-white">{{ cleanup_stats.favorited_count }} 条</span>
+            </div>
+            <div>
+                <span class="text-slate-400">最近保护：</span>
+                <span class="text-white">{{ cleanup_stats.recent_protected }} 条</span>
+            </div>
+            <div>
+                <span class="text-slate-400">可清理：</span>
+                <span class="text-yellow-400">{{ cleanup_stats.deletable_articles }} 条</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新闻源状态表格 -->
+    <div class="bg-slate-800 rounded-xl p-4 mb-6">
+        <h3 class="text-lg font-semibold mb-4">📡 新闻源状态</h3>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-slate-400 border-b border-slate-700">
+                        <th class="text-left py-2 px-3">新闻源</th>
+                        <th class="text-left py-2 px-3">类型</th>
+                        <th class="text-left py-2 px-3">分类</th>
+                        <th class="text-center py-2 px-3">总文章</th>
+                        <th class="text-center py-2 px-3">今日</th>
+                        <th class="text-left py-2 px-3">最后爬取</th>
+                        <th class="text-center py-2 px-3">状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for src in sources %}
+                    <tr class="border-b border-slate-700 hover:bg-slate-700/50">
+                        <td class="py-2 px-3">
+                            <div class="flex items-center gap-2">
+                                {% if not src.enabled %}
+                                <span class="text-slate-500">⚫</span>
+                                {% elif src.last_status == 'success' %}
+                                <span class="text-green-400">🟢</span>
+                                {% elif src.last_status == 'error' %}
+                                <span class="text-red-400">🔴</span>
+                                {% else %}
+                                <span class="text-yellow-400">🟡</span>
+                                {% endif %}
+                                <span class="{% if not src.enabled %}text-slate-500{% else %}text-white{% endif %}">
+                                    {{ src.name }}
+                                </span>
+                            </div>
+                        </td>
+                        <td class="py-2 px-3 text-slate-400">{{ src.type }}</td>
+                        <td class="py-2 px-3 text-slate-400">{{ src.category }}</td>
+                        <td class="py-2 px-3 text-center text-white">{{ src.article_count }}</td>
+                        <td class="py-2 px-3 text-center">
+                            {% if src.today_count > 0 %}
+                            <span class="text-green-400">+{{ src.today_count }}</span>
+                            {% else %}
+                            <span class="text-slate-500">0</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2 px-3 text-slate-400">{{ src.last_crawled_at }}</td>
+                        <td class="py-2 px-3 text-center">
+                            {% if src.last_status == 'success' %}
+                            <span class="badge bg-green-900 text-green-300">成功</span>
+                            {% elif src.last_status == 'error' %}
+                            <span class="badge bg-red-900 text-red-300" title="{{ src.last_error }}">失败</span>
+                            {% else %}
+                            <span class="badge bg-slate-700 text-slate-400">未知</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 最近爬取日志 -->
+    <div class="bg-slate-800 rounded-xl p-4">
+        <h3 class="text-lg font-semibold mb-4">📝 最近爬取日志</h3>
+        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+            <table class="w-full text-sm">
+                <thead class="sticky top-0 bg-slate-800">
+                    <tr class="text-slate-400 border-b border-slate-700">
+                        <th class="text-left py-2 px-3">时间</th>
+                        <th class="text-left py-2 px-3">新闻源</th>
+                        <th class="text-center py-2 px-3">状态</th>
+                        <th class="text-center py-2 px-3">发现</th>
+                        <th class="text-center py-2 px-3">新增</th>
+                        <th class="text-center py-2 px-3">耗时</th>
+                        <th class="text-left py-2 px-3">错误信息</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr class="border-b border-slate-700/50 hover:bg-slate-700/30">
+                        <td class="py-2 px-3 text-slate-400">{{ log.crawled_at }}</td>
+                        <td class="py-2 px-3 text-white">{{ log.source_name }}</td>
+                        <td class="py-2 px-3 text-center">
+                            {% if log.status == 'success' %}
+                            <span class="badge bg-green-900 text-green-300">成功</span>
+                            {% elif log.status == 'error' %}
+                            <span class="badge bg-red-900 text-red-300">失败</span>
+                            {% else %}
+                            <span class="badge bg-yellow-900 text-yellow-300">超时</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2 px-3 text-center text-slate-400">{{ log.articles_found }}</td>
+                        <td class="py-2 px-3 text-center">
+                            {% if log.new_articles > 0 %}
+                            <span class="text-green-400">+{{ log.new_articles }}</span>
+                            {% else %}
+                            <span class="text-slate-500">0</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-2 px-3 text-center text-slate-400">{{ log.duration }}s</td>
+                        <td class="py-2 px-3 text-red-400 text-xs max-w-xs truncate" title="{{ log.error }}">
+                            {{ log.error }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% if not logs %}
+                    <tr>
+                        <td colspan="7" class="py-8 text-center text-slate-500">暂无爬取日志</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// 图表颜色配置
+const chartColors = {
+    blue: '#3b82f6',
+    green: '#22c55e',
+    yellow: '#eab308',
+    red: '#ef4444',
+    purple: '#a855f7',
+    pink: '#ec4899',
+    orange: '#f97316',
+    cyan: '#06b6d4',
+    gray: '#6b7280',
+};
+
+// 加载图表数据
+async function loadCharts() {
+    try {
+        const resp = await fetch('/api/admin/stats');
+        const data = await resp.json();
+
+        // 每日趋势图
+        new Chart(document.getElementById('dailyChart'), {
+            type: 'line',
+            data: {
+                labels: data.daily_stats.map(d => d.date),
+                datasets: [{
+                    label: '新增文章',
+                    data: data.daily_stats.map(d => d.count),
+                    borderColor: chartColors.blue,
+                    backgroundColor: chartColors.blue + '20',
+                    fill: true,
+                    tension: 0.3,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: '#334155' },
+                    },
+                    x: {
+                        ticks: { color: '#94a3b8' },
+                        grid: { display: false },
+                    }
+                }
+            }
+        });
+
+        // 分类分布图
+        const categoryLabels = Object.keys(data.category_stats);
+        const categoryValues = Object.values(data.category_stats);
+        const categoryColors = [
+            chartColors.blue, chartColors.green, chartColors.yellow,
+            chartColors.red, chartColors.purple, chartColors.pink,
+            chartColors.orange, chartColors.cyan, chartColors.gray,
+        ];
+
+        new Chart(document.getElementById('categoryChart'), {
+            type: 'doughnut',
+            data: {
+                labels: categoryLabels,
+                datasets: [{
+                    data: categoryValues,
+                    backgroundColor: categoryColors.slice(0, categoryLabels.length),
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: '#e2e8f0', padding: 12 },
+                    },
+                }
+            }
+        });
+    } catch (e) {
+        console.error('Failed to load chart data:', e);
+    }
+}
+
+// 手动触发爬取
+async function triggerCrawl() {
+    const btn = document.getElementById('crawl-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ 爬取中...';
+
+    try {
+        const resp = await fetch('/api/admin/crawl', { method: 'POST' });
+        const data = await resp.json();
+        alert(data.message);
+
+        // 5 秒后刷新页面查看结果
+        setTimeout(() => location.reload(), 5000);
+    } catch (e) {
+        alert('爬取失败: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '🔄 立即爬取';
+    }
+}
+
+// 初始化
+loadCharts();
+</script>
+{% endblock %}

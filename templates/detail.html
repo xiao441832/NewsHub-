@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ article.title }} - NewsHub</title>
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="NewsHub">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <link rel="manifest" href="/static/manifest.json">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a; --bg-secondary: #1e293b; --bg-card: #1e293b;
+            --text-primary: #e2e8f0; --text-secondary: #94a3b8; --text-muted: #64748b;
+            --border: #334155; --accent: #3b82f6;
+        }
+        .light {
+            --bg-primary: #f8fafc; --bg-secondary: #ffffff; --bg-card: #ffffff;
+            --text-primary: #1e293b; --text-secondary: #475569; --text-muted: #94a3b8;
+            --border: #e2e8f0; --accent: #2563eb;
+        }
+        body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; transition: background 0.3s, color 0.3s; }
+        .article-content { line-height: 1.8; font-size: 16px; }
+        .article-content p { margin-bottom: 1em; }
+        .article-content img { max-width: 100%; border-radius: 8px; margin: 1em 0; }
+        .article-content h1, .article-content h2, .article-content h3,
+        .article-content h4, .article-content h5, .article-content h6 {
+            color: var(--text-primary); font-weight: bold; margin: 1.5em 0 0.5em;
+        }
+        .article-content h1 { font-size: 1.5rem; }
+        .article-content h2 { font-size: 1.3rem; }
+        .article-content h3 { font-size: 1.15rem; }
+        .article-content blockquote {
+            border-left: 4px solid var(--accent); padding: 0.5em 1em;
+            margin: 1em 0; background: rgba(59,130,246,0.05); border-radius: 0 8px 8px 0;
+        }
+        .article-content a { color: #60a5fa; text-decoration: underline; }
+        .article-content ul, .article-content ol { margin: 1em 0; padding-left: 2em; }
+        .article-content li { margin-bottom: 0.3em; }
+        .article-content table { width: 100%; border-collapse: collapse; margin: 1em 0; }
+        .article-content th, .article-content td {
+            border: 1px solid var(--border); padding: 8px 12px; text-align: left;
+        }
+        .article-content th { background: var(--bg-secondary); font-weight: 600; }
+        .fallback-summary { font-size: 16px; line-height: 1.8; }
+        .notice { color: #f59e0b; font-size: 14px; }
+        .badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 9999px; }
+        .related-card { transition: background 0.2s; }
+        .related-card:hover { background: var(--border); }
+        .bg-slate-800 { background: var(--bg-secondary) !important; }
+        .bg-slate-700 { background: var(--border) !important; }
+        .bg-slate-600 { background: var(--text-muted) !important; }
+        .text-white { color: var(--text-primary) !important; }
+        .text-slate-300 { color: var(--text-secondary) !important; }
+        .text-slate-400 { color: var(--text-secondary) !important; }
+        .text-slate-500 { color: var(--text-muted) !important; }
+        .text-slate-600 { color: var(--text-muted) !important; }
+        .border-slate-700 { border-color: var(--border) !important; }
+        .border-slate-600 { border-color: var(--border) !important; }
+        .border-slate-800 { border-color: var(--border) !important; }
+        .hover\:bg-slate-700:hover { background: var(--border) !important; }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Navbar -->
+    <nav class="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <a href="/" class="text-xl font-bold text-white flex items-center gap-2">
+                <span>NewsHub 全球新闻</span>
+            </a>
+            <div class="flex items-center gap-3">
+                <a href="/" class="text-slate-400 hover:text-white text-sm">返回首页</a>
+                {% if user %}
+                <a href="/favorites" class="text-slate-400 hover:text-white text-sm">我的收藏</a>
+                <a href="/history" class="text-slate-400 hover:text-white text-sm">阅读历史</a>
+                {% endif %}
+                <div class="flex items-center gap-2">
+                    <button onclick="toggleTheme()" id="theme-toggle" class="text-lg px-2 py-1 rounded-lg hover:bg-slate-700" title="切换主题">🌙</button>
+                    {% if user %}
+                    <span class="text-sm text-slate-300">
+                        {{ user.username }}
+                        <button onclick="doLogout()" class="text-slate-500 hover:text-white ml-2">退出</button>
+                    </span>
+                    {% else %}
+                    <button onclick="showAuth()" class="text-sm text-slate-400 hover:text-white px-3 py-2">登录</button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Auth Modal -->
+    <div id="auth-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+        <div class="bg-slate-800 rounded-xl p-6 w-80">
+            <div id="login-form">
+                <h3 class="text-white text-lg font-bold mb-4">登录</h3>
+                <p id="login-msg" class="text-sm mb-3 hidden"></p>
+                <input id="login-username" type="text" placeholder="用户名" class="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 mb-3 focus:outline-none focus:border-blue-500">
+                <input id="login-password" type="password" placeholder="密码" class="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 mb-4 focus:outline-none focus:border-blue-500">
+                <button onclick="doLogin()" id="login-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg mb-3">登录</button>
+                <p class="text-center text-slate-400 text-sm">没有账号？<button onclick="toggleAuthForm('register')" class="text-blue-400 hover:underline">去注册</button></p>
+            </div>
+            <div id="register-form" class="hidden">
+                <h3 class="text-white text-lg font-bold mb-4">注册</h3>
+                <p id="register-msg" class="text-sm mb-3 hidden"></p>
+                <input id="reg-username" type="text" placeholder="用户名" class="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 mb-3 focus:outline-none focus:border-blue-500">
+                <input id="reg-password" type="password" placeholder="密码（至少6位）" class="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 mb-3 focus:outline-none focus:border-blue-500">
+                <input id="reg-confirm" type="password" placeholder="确认密码" class="w-full bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 mb-4 focus:outline-none focus:border-blue-500">
+                <button onclick="doRegister()" id="reg-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg mb-3">注册</button>
+                <p class="text-center text-slate-400 text-sm">已有账号？<button onclick="toggleAuthForm('login')" class="text-blue-400 hover:underline">去登录</button></p>
+            </div>
+            <button onclick="hideAuth()" class="w-full text-slate-500 hover:text-white text-sm mt-3">取消</button>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 py-6 flex gap-6">
+        <!-- Sidebar -->
+        <aside class="w-56 flex-shrink-0 hidden lg:block">
+            <div class="bg-slate-800 rounded-xl p-4 mb-4">
+                <h3 class="text-sm font-semibold text-slate-400 mb-3">新闻分类</h3>
+                {% for cat_key, cat_name in categories.items() %}
+                <a href="/?category={{ cat_key }}" class="block px-3 py-2 rounded-lg mb-1 hover:bg-slate-700">
+                    {% if cat_key == 'china' %}🇨🇳{% elif cat_key == 'international' %}🌍{% elif cat_key == 'finance' %}💰{% elif cat_key == 'tech' %}💻{% elif cat_key == 'military' %}🎖️{% elif cat_key == 'sports' %}⚽{% elif cat_key == 'society' %}🏙️{% elif cat_key == 'local' %}📍{% else %}📋{% endif %}
+                    {{ cat_name }}
+                </a>
+                {% endfor %}
+            </div>
+
+            {% if related %}
+            <div class="bg-slate-800 rounded-xl p-4">
+                <h3 class="text-sm font-semibold text-slate-400 mb-3">相关推荐</h3>
+                {% for r in related %}
+                <a href="/article/{{ r.id }}" class="block related-card rounded-lg p-2 mb-2">
+                    <p class="text-sm text-slate-300 line-clamp-2">{{ r.title }}</p>
+                    <p class="text-xs text-slate-500 mt-1">{{ r.source }}</p>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 max-w-4xl">
+            <article>
+                <div class="mb-6">
+                    <div class="flex items-center gap-2 mb-3 flex-wrap">
+                        {% set cat_colors = {
+                            "china": "bg-red-900 text-red-300",
+                            "international": "bg-blue-900 text-blue-300",
+                            "finance": "bg-yellow-900 text-yellow-300",
+                            "tech": "bg-purple-900 text-purple-300",
+                            "military": "bg-orange-900 text-orange-300",
+                            "sports": "bg-green-900 text-green-300",
+                            "society": "bg-pink-900 text-pink-300",
+                            "local": "bg-teal-900 text-teal-300",
+                            "other": "bg-gray-700 text-gray-300"
+                        } %}
+                        {% set cat_icons = {
+                            "china": "🇨🇳",
+                            "international": "🌍",
+                            "finance": "💰",
+                            "tech": "💻",
+                            "military": "🎖️",
+                            "sports": "⚽",
+                            "society": "🏙️",
+                            "local": "📍",
+                            "other": "📋"
+                        } %}
+                        <span class="badge bg-slate-600 text-slate-200">{{ article.source }}</span>
+                        <span class="badge {{ cat_colors.get(article.category, 'bg-gray-700 text-gray-300') }}">
+                            {{ cat_icons.get(article.category, '📋') }} {{ categories.get(article.category, '其他') }}
+                        </span>
+                        {% if article.published_at %}
+                        <span class="text-sm text-slate-500">{{ article.published_at }}</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex items-start gap-3 mb-4">
+                        <h1 class="text-2xl md:text-3xl font-bold text-white flex-1">{{ article.title }}</h1>
+                        <button onclick="toggleFavorite({{ article.id }}, this)" id="fav-btn" class="text-2xl text-slate-500 hover:text-yellow-400 flex-shrink-0" title="收藏">☆</button>
+                    </div>
+
+                    {% if article.summary %}
+                    <div class="bg-slate-800 border-l-4 border-blue-500 rounded-r-lg p-4 mb-6">
+                        <p class="text-slate-300 text-sm leading-relaxed">{{ article.summary }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if article.content %}
+                <div class="bg-slate-800 rounded-xl p-6 md:p-8">
+                    <div class="article-content text-slate-300">
+                        {{ article.content | safe }}
+                    </div>
+                </div>
+                {% elif article.summary %}
+                <div class="bg-slate-800 rounded-xl p-6 md:p-8">
+                    <div class="article-content text-slate-300">
+                        <p>{{ article.summary }}</p>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-slate-700 text-center">
+                        <p class="text-slate-500 text-sm mb-2">⚠️ 正文暂时无法加载，以上为 AI 摘要</p>
+                        <a href="{{ article.url }}" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm">
+                            前往原文查看完整内容 →
+                        </a>
+                    </div>
+                </div>
+                {% else %}
+                <div class="bg-slate-800 rounded-xl p-8 text-center text-slate-500">
+                    <p class="text-4xl mb-4">📄</p>
+                    <p>暂无正文内容</p>
+                    <a href="{{ article.url }}" target="_blank" class="inline-block mt-4 text-blue-400 hover:text-blue-300">
+                        前往原文查看 →
+                    </a>
+                </div>
+                {% endif %}
+
+                <div class="mt-6 flex items-center justify-between">
+                    <a href="{{ article.url }}" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm">
+                        查看原文 →
+                    </a>
+                    <span class="text-xs text-slate-600">来源: {{ article.source }}</span>
+                </div>
+            </article>
+
+            <!-- Comments Section -->
+            <div class="mt-8 bg-slate-800 rounded-xl p-6">
+                <h3 class="text-lg font-bold text-white mb-4">评论 ({{ comments|length }})</h3>
+
+                {% if user %}
+                <div id="comment-form" class="mb-6">
+                    <textarea id="comment-input" placeholder="写下你的评论..." rows="3"
+                              class="w-full bg-slate-700 text-white px-4 py-3 rounded-lg border border-slate-600 focus:outline-none focus:border-blue-500 resize-none"></textarea>
+                    <div class="flex justify-end mt-2">
+                        <button onclick="postComment()" id="comment-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm">发表评论</button>
+                    </div>
+                    <p id="comment-msg" class="text-sm mt-2 hidden"></p>
+                </div>
+                {% else %}
+                <div class="mb-6 text-sm text-slate-500">
+                    <button onclick="showAuth()" class="text-blue-400 hover:underline">登录</button> 后发表评论
+                </div>
+                {% endif %}
+
+                <div id="comments-list">
+                    {% if comments %}
+                    {% for c in comments %}
+                    <div class="border-b border-slate-700 py-3 last:border-0 comment-item">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-sm font-medium text-white">{{ c.username }}</span>
+                            <span class="text-xs text-slate-500">{{ c.created_at }}</span>
+                        </div>
+                        <p class="text-slate-300 text-sm">{{ c.content }}</p>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <p class="text-slate-500 text-sm" id="no-comments">暂无评论，来说两句吧</p>
+                    {% endif %}
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <footer class="text-center py-6 text-slate-600 text-sm border-t border-slate-800 mt-8">
+        NewsHub 全球新闻聚合
+    </footer>
+
+    <script>
+    var userLoggedIn = {{ 'true' if user else 'false' }};
+    var currentUsername = '{{ user.username if user else "" }}';
+
+    function toggleTheme() {
+        var isLight = document.documentElement.classList.toggle('light');
+        localStorage.setItem('newshub_theme', isLight ? 'light' : 'dark');
+        document.getElementById('theme-toggle').textContent = isLight ? '☀️' : '🌙';
+    }
+    (function loadTheme() {
+        if (localStorage.getItem('newshub_theme') === 'light') {
+            document.documentElement.classList.add('light');
+            document.addEventListener('DOMContentLoaded', function() {
+                var btn = document.getElementById('theme-toggle');
+                if (btn) btn.textContent = '☀️';
+            });
+        }
+    })();
+
+    function showAuth() { document.getElementById('auth-modal').classList.remove('hidden'); toggleAuthForm('login'); }
+    function hideAuth() { document.getElementById('auth-modal').classList.add('hidden'); clearAuthMsgs(); }
+    function toggleAuthForm(form) {
+        document.getElementById('login-form').classList.toggle('hidden', form !== 'login');
+        document.getElementById('register-form').classList.toggle('hidden', form !== 'register');
+        clearAuthMsgs();
+    }
+    function clearAuthMsgs() {
+        ['login-msg','register-msg'].forEach(function(id) { var el = document.getElementById(id); if(el){el.classList.add('hidden');el.textContent='';} });
+    }
+    function showAuthMsg(id, text, isError) {
+        var el = document.getElementById(id); el.textContent = text;
+        el.className = 'text-sm mb-3 ' + (isError ? 'text-red-400' : 'text-green-400');
+        el.classList.remove('hidden');
+    }
+
+    async function doLogin() {
+        clearAuthMsgs();
+        var username = document.getElementById('login-username').value.trim();
+        var password = document.getElementById('login-password').value;
+        if (!username || !password) { showAuthMsg('login-msg', '请填写用户名和密码', true); return; }
+        var btn = document.getElementById('login-btn'); btn.disabled = true; btn.textContent = '登录中...';
+        try {
+            var resp = await fetch('/api/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'same-origin',
+                body: JSON.stringify({username: username, password: password})
+            });
+            var data = await resp.json();
+            btn.disabled = false; btn.textContent = '登录';
+            if (!resp.ok) { showAuthMsg('login-msg', data.detail || '登录失败', true); return; }
+            window.location.reload();
+        } catch(e) {
+            btn.disabled = false; btn.textContent = '登录';
+            showAuthMsg('login-msg', '网络错误', true);
+        }
+    }
+
+    async function doRegister() {
+        clearAuthMsgs();
+        var username = document.getElementById('reg-username').value.trim();
+        var password = document.getElementById('reg-password').value;
+        var confirm = document.getElementById('reg-confirm').value;
+        if (!username) { showAuthMsg('register-msg', '请输入用户名', true); return; }
+        if (password.length < 6) { showAuthMsg('register-msg', '密码至少需要6位', true); return; }
+        if (password !== confirm) { showAuthMsg('register-msg', '两次密码不一致', true); return; }
+        var btn = document.getElementById('reg-btn'); btn.disabled = true; btn.textContent = '注册中...';
+        try {
+            var resp = await fetch('/api/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'same-origin',
+                body: JSON.stringify({username: username, password: password})
+            });
+            var data = await resp.json();
+            btn.disabled = false; btn.textContent = '注册';
+            if (!resp.ok) { showAuthMsg('register-msg', data.detail || '注册失败', true); return; }
+            window.location.reload();
+        } catch(e) {
+            btn.disabled = false; btn.textContent = '注册';
+            showAuthMsg('register-msg', '网络错误', true);
+        }
+    }
+
+    async function doLogout() {
+        await fetch('/api/logout', {method: 'POST', credentials: 'same-origin'});
+        window.location.reload();
+    }
+
+    // ═══ 收藏 ═══
+    async function toggleFavorite(articleId, btn) {
+        if (!userLoggedIn) { showAuth(); return; }
+        try {
+            var resp = await fetch('/api/favorites/' + articleId, {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
+            var data = await resp.json();
+            if (resp.ok) {
+                btn.textContent = data.action === 'added' ? '★' : '☆';
+            }
+        } catch(e) {}
+    }
+
+    // Restore favorite state
+    async function restoreFavorite() {
+        if (!userLoggedIn) return;
+        try {
+            var resp = await fetch('/api/favorites', {credentials: 'same-origin'});
+            if (!resp.ok) return;
+            var data = await resp.json();
+            var ids = new Set(data.articles.map(function(a) { return a.id; }));
+            if (ids.has({{ article.id }})) {
+                document.getElementById('fav-btn').textContent = '★';
+            }
+        } catch(e) {}
+    }
+    restoreFavorite();
+
+    // ═══ 阅读历史已由后端自动记录（打开详情页即记录）══
+
+    // ═══ 评论 ═══
+    async function postComment() {
+        var input = document.getElementById('comment-input');
+        var content = input.value.trim();
+        if (!content) return;
+
+        var btn = document.getElementById('comment-btn');
+        var msgEl = document.getElementById('comment-msg');
+        btn.disabled = true;
+        btn.textContent = '发表中...';
+
+        try {
+            var resp = await fetch('/api/articles/{{ article.id }}/comments', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'same-origin',
+                body: JSON.stringify({content: content})
+            });
+
+            if (!resp.ok) {
+                var err = await resp.json();
+                msgEl.textContent = err.detail || '评论失败';
+                msgEl.className = 'text-sm mt-2 text-red-400';
+                msgEl.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = '发表评论';
+                return;
+            }
+
+            var comment = await resp.json();
+
+            // Remove "no comments" placeholder if present
+            var noComments = document.getElementById('no-comments');
+            if (noComments) noComments.remove();
+
+            // Insert new comment at top of list
+            var list = document.getElementById('comments-list');
+            var html = '<div class="border-b border-slate-700 py-3 last:border-0 comment-item">' +
+                '<div class="flex items-center gap-2 mb-1">' +
+                    '<span class="text-sm font-medium text-white">' + comment.username.replace(/</g, '&lt;') + '</span>' +
+                    '<span class="text-xs text-slate-500">' + comment.created_at + '</span>' +
+                '</div>' +
+                '<p class="text-slate-300 text-sm">' + comment.content.replace(/</g, '&lt;') + '</p>' +
+            '</div>';
+            list.insertAdjacentHTML('afterbegin', html);
+
+            // Clear input and show success
+            input.value = '';
+            msgEl.textContent = '评论发表成功';
+            msgEl.className = 'text-sm mt-2 text-green-400';
+            msgEl.classList.remove('hidden');
+            setTimeout(function() { msgEl.classList.add('hidden'); }, 3000);
+
+            // Update comment count in header
+            var header = document.querySelector('.mt-8 h3');
+            if (header) {
+                var count = list.querySelectorAll('.comment-item').length;
+                header.textContent = '评论 (' + count + ')';
+            }
+        } catch(e) {
+            msgEl.textContent = '网络错误，请稍后重试';
+            msgEl.className = 'text-sm mt-2 text-red-400';
+            msgEl.classList.remove('hidden');
+        }
+
+        btn.disabled = false;
+        btn.textContent = '发表评论';
+    }
+
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js').catch(function(){}); }
+    </script>
+</body>
+</html>
