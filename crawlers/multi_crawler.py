@@ -3,6 +3,14 @@ Supports: RSS, CCTV JSON API, Sina JSON API, Web Scraping
 """
 import sys
 import os
+
+# 修复 Windows 控制台编码问题
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 import json
 import re
 import time
@@ -14,7 +22,7 @@ import requests
 from bs4 import BeautifulSoup
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import USER_AGENT, MAX_ARTICLES_PER_SOURCE, REQUEST_TIMEOUT, NEWS_SOURCES
+from config import USER_AGENT, MAX_ARTICLES_PER_SOURCE, REQUEST_TIMEOUT, REQUEST_TIMEOUT_SCRAPE, NEWS_SOURCES
 
 
 HEADERS = {
@@ -27,6 +35,28 @@ HEADERS = {
 
 SESSION = requests.Session()
 SESSION.headers.update(HEADERS)
+
+# ─── 域名级限速：同域名请求间隔 0.5 秒 ───
+import threading
+from urllib.parse import urlparse
+_domain_locks: Dict[str, float] = {}
+_domain_lock = threading.Lock()
+_DOMAIN_MIN_INTERVAL = 0.5  # 秒
+
+# 网页抓取时动态切换超时
+_scrape_timeout = REQUEST_TIMEOUT
+
+
+def _domain_rate_limit(url: str):
+    """确保同一域名的请求间隔不低于 _DOMAIN_MIN_INTERVAL 秒"""
+    domain = urlparse(url).netloc
+    with _domain_lock:
+        now = time.time()
+        last = _domain_locks.get(domain, 0)
+        wait = _DOMAIN_MIN_INTERVAL - (now - last)
+        if wait > 0:
+            time.sleep(wait)
+        _domain_locks[domain] = time.time()
 
 # Non-news URL patterns to filter out
 _NOISE_PATTERNS = re.compile(
@@ -54,9 +84,12 @@ def _is_valid_article(title: str, url: str) -> bool:
     return True
 
 
-def _get(url: str, timeout: int = REQUEST_TIMEOUT, encoding: str = None) -> Optional[requests.Response]:
-    """Safe HTTP GET with retries"""
-    for attempt in range(2):
+def _get(url: str, timeout: int = None, encoding: str = None) -> Optional[requests.Response]:
+    """Safe HTTP GET with retries and exponential backoff"""
+    if timeout is None:
+        timeout = _scrape_timeout
+    _domain_rate_limit(url)
+    for attempt in range(3):
         try:
             resp = SESSION.get(url, timeout=timeout, allow_redirects=True)
             if encoding:
@@ -66,10 +99,11 @@ def _get(url: str, timeout: int = REQUEST_TIMEOUT, encoding: str = None) -> Opti
             resp.raise_for_status()
             return resp
         except Exception as e:
-            if attempt == 0:
-                time.sleep(1)
+            if attempt < 2:
+                wait = 2 ** attempt  # 1s, 2s
+                time.sleep(wait)
             else:
-                print(f"    ⚠ GET failed: {url[:60]}... {e}")
+                print(f"    ⚠ GET failed (3 attempts): {url[:60]}... {e}")
     return None
 
 
@@ -78,13 +112,19 @@ def _get(url: str, timeout: int = REQUEST_TIMEOUT, encoding: str = None) -> Opti
 # ═══════════════════════════════════════════════
 
 def crawl_rss(source: Dict) -> List[Dict]:
-    """Parse RSS/Atom feed"""
+    """Parse RSS/Atom feed — uses XML parser so <link> tags are not self-closed."""
     articles = []
     resp = _get(source["url"])
     if not resp:
         return articles
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+    # Use lxml XML parser (correctly handles <link>content</link> in RSS).
+    # Falls back to html.parser if lxml is not installed.
+    try:
+        soup = BeautifulSoup(resp.text, "xml")
+    except Exception:
+        soup = BeautifulSoup(resp.text, "html.parser")
+
     items = soup.find_all("item") or soup.find_all("entry")
 
     for item in items[:MAX_ARTICLES_PER_SOURCE]:
@@ -474,6 +514,9 @@ _BAIDU_NEWS_DOMAINS = [
     "xinhuanet.com", "huanqiu.com", "gmw.cn", "cnr.cn", "youth.cn",
     "cankaoxiaoxi.com", "caixin.com", "jiemian.com", "36kr.com",
     "tech.qq.com", "tech.sina.com", "ithome.com",
+    "baijiahao.baidu.com", "baijiahao.baidu.com",
+    "bjnews.com.cn", "guancha.cn", "yicai.com", "nbd.com.cn",
+    "stcn.com", "cls.cn", "ifeng.com",
 ]
 
 
@@ -910,6 +953,140 @@ def crawl_ifeng(source: Dict) -> List[Dict]:
     return articles
 
 
+def crawl_guancha(source: Dict) -> List[Dict]:
+    """观察者网"""
+    resp = _get(source["url"])
+    if not resp:
+        return []
+    resp.encoding = 'utf-8'
+    soup = BeautifulSoup(resp.text, "html.parser")
+    articles = []
+    seen = set()
+
+    for a in soup.find_all("a", href=True):
+        title = a.get_text(strip=True)
+        href = a["href"]
+        if not _is_valid_article(title, href):
+            continue
+        if not href.startswith("http"):
+            from urllib.parse import urljoin
+            href = urljoin("https://www.guancha.cn/", href)
+        if href in seen or 'guancha.cn' not in href:
+            continue
+        # Filter out non-article pages
+        if '/member/' in href or '/user/' in href or '/special/' in href:
+            continue
+        seen.add(href)
+        articles.append({
+            "title": title, "url": href,
+            "source": source["name"], "category": source["category"],
+            "summary": "", "image_url": "", "published_at": None, "lang": "zh",
+        })
+        if len(articles) >= MAX_ARTICLES_PER_SOURCE:
+            break
+    return articles
+
+
+def crawl_bjnews(source: Dict) -> List[Dict]:
+    """新京报"""
+    resp = _get(source["url"])
+    if not resp:
+        return []
+    resp.encoding = 'utf-8'
+    soup = BeautifulSoup(resp.text, "html.parser")
+    articles = []
+    seen = set()
+
+    for a in soup.find_all("a", href=True):
+        title = a.get_text(strip=True)
+        href = a["href"]
+        if not _is_valid_article(title, href):
+            continue
+        if not href.startswith("http"):
+            from urllib.parse import urljoin
+            href = urljoin("https://www.bjnews.com.cn/", href)
+        if href in seen or '/detail/' not in href:
+            continue
+        seen.add(href)
+        articles.append({
+            "title": title, "url": href,
+            "source": source["name"], "category": source["category"],
+            "summary": "", "image_url": "", "published_at": None, "lang": "zh",
+        })
+        if len(articles) >= MAX_ARTICLES_PER_SOURCE:
+            break
+    return articles
+
+
+def crawl_163(source: Dict) -> List[Dict]:
+    """网易新闻"""
+    resp = _get(source["url"])
+    if not resp:
+        return []
+    resp.encoding = 'utf-8'
+    soup = BeautifulSoup(resp.text, "html.parser")
+    articles = []
+    seen = set()
+
+    for a in soup.find_all("a", href=True):
+        title = a.get_text(strip=True)
+        href = a["href"]
+        if not _is_valid_article(title, href):
+            continue
+        if not href.startswith("http"):
+            continue
+        if href in seen:
+            continue
+        # Only 163.com article pages
+        if '163.com' not in href or '/article/' not in href:
+            continue
+        # Filter noise
+        if any(x in href for x in ['mail.163.com', 'reg1.vip', 'dl.html', 'news.163.com/special']):
+            continue
+        seen.add(href)
+        articles.append({
+            "title": title, "url": href,
+            "source": source["name"], "category": source["category"],
+            "summary": "", "image_url": "", "published_at": None, "lang": "zh",
+        })
+        if len(articles) >= MAX_ARTICLES_PER_SOURCE:
+            break
+    return articles
+
+
+def crawl_chinanews_scroll(source: Dict) -> List[Dict]:
+    """中新网滚动新闻 (chinanews.com.cn)"""
+    resp = _get(source["url"])
+    if not resp:
+        return []
+    resp.encoding = 'utf-8'
+    soup = BeautifulSoup(resp.text, "html.parser")
+    articles = []
+    seen = set()
+
+    for a in soup.find_all("a", href=True):
+        title = a.get_text(strip=True)
+        href = a["href"]
+        if not _is_valid_article(title, href):
+            continue
+        if not href.startswith("http"):
+            from urllib.parse import urljoin
+            href = urljoin("https://www.chinanews.com.cn/", href)
+        if href in seen or 'chinanews.com.cn' not in href:
+            continue
+        if '/sitemap' in href or '/about' in href:
+            continue
+        seen.add(href)
+        articles.append({
+            "title": title, "url": href,
+            "source": source["name"], "category": source["category"],
+            "summary": "", "image_url": "", "published_at": None, "lang": "zh",
+        })
+        if len(articles) >= MAX_ARTICLES_PER_SOURCE:
+            break
+    return articles
+
+
 # ═══════════════════════════════════════════════
 # Crawler Dispatcher
 # ═══════════════════════════════════════════════
@@ -934,6 +1111,11 @@ SCRAPER_MAP = {
     "stcn": crawl_stcn,
     "chinanews": crawl_chinanews,
     "ifeng": crawl_ifeng,
+    # 替代源
+    "guancha": crawl_guancha,
+    "bjnews": crawl_bjnews,
+    "163": crawl_163,
+    "chinanews_scroll": crawl_chinanews_scroll,
 }
 
 TYPE_MAP = {
@@ -945,6 +1127,7 @@ TYPE_MAP = {
 
 def crawl_source(source: Dict) -> List[Dict]:
     """Dispatch to the right crawler for a source"""
+    global _scrape_timeout
     src_type = source["type"]
 
     if src_type in TYPE_MAP:
@@ -952,7 +1135,11 @@ def crawl_source(source: Dict) -> List[Dict]:
     elif src_type == "web_scrape":
         scraper_name = source.get("scraper", "")
         if scraper_name in SCRAPER_MAP:
-            return SCRAPER_MAP[scraper_name](source)
+            _scrape_timeout = REQUEST_TIMEOUT_SCRAPE
+            try:
+                return SCRAPER_MAP[scraper_name](source)
+            finally:
+                _scrape_timeout = REQUEST_TIMEOUT
         else:
             print(f"    ⚠ No scraper for: {scraper_name}")
             return []
@@ -1384,6 +1571,12 @@ def save_to_db(articles: List[Dict], db, fetch_content: bool = True) -> int:
     # 构建新闻源配置查找表（按 name 索引）
     source_config_map = {src["name"]: src for src in NEWS_SOURCES}
 
+    # 确保数据库会话状态正常
+    try:
+        db.rollback()
+    except Exception:
+        pass
+
     # Pre-load recent titles for similarity check
     cutoff = datetime.now() - timedelta(days=2)
     recent = db.query(NewsArticle).filter(NewsArticle.created_at >= cutoff).all()
@@ -1441,22 +1634,32 @@ def save_to_db(articles: List[Dict], db, fetch_content: bool = True) -> int:
             rss_summary = str(art.get("summary", ""))[:300]
             summary = rss_summary if rss_summary else fallback_summary(art["title"])
 
-        article = NewsArticle(
-            title=art["title"],
-            url=art["url"],
-            source=art["source"],
-            category=art["category"],
-            summary=summary[:500],
-            content=content_html,
-            image_url=str(art.get("image_url", ""))[:1000],
-            published_at=pub,
-        )
-        db.add(article)
-        existing_urls.add(art["url"])
-        existing_titles.append(_normalize_title(art["title"]))
-        new_count += 1
+        # 逐条保存，遇到重复 URL 立即跳过，不影响其他文章
+        try:
+            article = NewsArticle(
+                title=art["title"],
+                url=art["url"],
+                source=art["source"],
+                category=art["category"],
+                summary=summary[:500],
+                content=content_html,
+                image_url=str(art.get("image_url", ""))[:1000],
+                published_at=pub,
+            )
+            db.add(article)
+            db.commit()
+            existing_urls.add(art["url"])
+            existing_titles.append(_normalize_title(art["title"]))
+            new_count += 1
+        except Exception as e:
+            db.rollback()
+            # 如果是重复 URL，静默跳过
+            if "UNIQUE constraint failed" in str(e) and "url" in str(e):
+                existing_urls.add(art["url"])
+                continue
+            # 其他错误，打印日志但不中断
+            print(f"    ⚠ 保存失败: {art['title'][:30]}... {e}")
 
-    db.commit()
     if fetched_count > 0:
         print(f"  📝 新增 {new_count} 篇文章，其中 {fetched_count} 篇成功抓取正文")
     return new_count

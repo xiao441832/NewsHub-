@@ -52,6 +52,10 @@ def _build_page_context(request: Request, **extra) -> dict:
         "categories": CATEGORIES,
         "user": user,
         "is_admin": is_admin,
+        "cat_icons": {
+            "china": "🇨🇳", "international": "🌍", "finance": "💰", "tech": "💻",
+            "military": "🎖️", "sports": "⚽", "society": "🏙️", "local": "📍", "other": "📰",
+        },
     }
     ctx.update(extra)
     return ctx
@@ -60,6 +64,51 @@ def _build_page_context(request: Request, **extra) -> dict:
 # 分页参数常量
 DEFAULT_PAGE_SIZE = 30
 MAX_PAGE_SIZE = 50
+
+
+def _dedup_by_title(articles_data: list, threshold: float = 0.65) -> list:
+    """标题相似度去重：相似度>threshold 时合并，保留最新一条，其余记录为 related_count"""
+    from difflib import SequenceMatcher
+    import re
+
+    def _norm(t):
+        # 去除空格、标点、来源前缀，只保留核心文字
+        t = re.sub(r'[\s\u3000]+', '', t or '').lower()
+        t = re.sub(r'[，。、；：！？\u201c\u201d\u2018\u2019【】《》（）\(\)\[\]\{\}\-\|\u00b7\u2026\u2014]', '', t)
+        # 去除常见新闻前缀
+        t = re.sub(r'^(快讯|突发|独家|重磅|最新|刚刚|早报|晚报)[：:]?', '', t)
+        return t
+
+    result = []
+    used = set()
+    for i, art in enumerate(articles_data):
+        if i in used:
+            continue
+        group = [art]
+        norm_i = _norm(art["title"])
+        if len(norm_i) < 4:
+            result.append(art)
+            used.add(i)
+            continue
+        for j in range(i + 1, len(articles_data)):
+            if j in used:
+                continue
+            norm_j = _norm(articles_data[j]["title"])
+            # 快速预检：前6个字不同直接跳过
+            if len(norm_i) >= 6 and len(norm_j) >= 6 and norm_i[:6] != norm_j[:6]:
+                continue
+            ratio = SequenceMatcher(None, norm_i, norm_j).ratio()
+            if ratio > threshold:
+                group.append(articles_data[j])
+                used.add(j)
+        # 保留最新的（published_at 最大的）
+        group.sort(key=lambda x: x.get("published_at", ""), reverse=True)
+        best = group[0].copy()
+        if len(group) > 1:
+            best["related_count"] = len(group) - 1
+        result.append(best)
+        used.add(i)
+    return result
 
 
 def paginate(query, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE):
@@ -94,14 +143,23 @@ def paginate(query, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE):
 # 页面路由
 # ═══════════════════════════════════════════════════════
 
+# 中文分类名 → 英文 key 映射
+CATEGORY_CN_TO_EN = {v: k for k, v in CATEGORIES.items()}
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, category: str = "", search: str = "", tag: str = "", page: int = 1, page_size: int = DEFAULT_PAGE_SIZE):
     """首页"""
     db = SessionLocal()
     query = db.query(NewsArticle).filter(NewsArticle.is_duplicate == False)
 
-    if category and category in CATEGORIES:
-        query = query.filter(NewsArticle.category == category)
+    # 支持中文分类名（?category=财经 → finance）
+    if category:
+        cat_key = CATEGORY_CN_TO_EN.get(category, category)
+        if cat_key in CATEGORIES:
+            query = query.filter(NewsArticle.category == cat_key)
+        else:
+            category = ""  # 无效分类，忽略过滤
     if search:
         query = query.filter(NewsArticle.title.ilike(f"%{search}%"))
     if tag:
@@ -110,6 +168,10 @@ def index(request: Request, category: str = "", search: str = "", tag: str = "",
     query = query.order_by(NewsArticle.published_at.desc())
     articles, total, total_pages = paginate(query, page, page_size)
     articles_data = [a.to_dict() for a in articles]
+
+    # 搜索时标题相似度去重
+    if search:
+        articles_data = _dedup_by_title(articles_data)
 
     # 分类计数
     category_counts = {}
@@ -781,11 +843,15 @@ def admin_page(request: Request):
 
         # 统计数据
         total_articles = db.query(NewsArticle).count()
-        total_sources = db.query(NewsSource).filter(NewsSource.enabled == True).count()
+        total_sources = get_source_count()  # 从 config 动态读取
         today_total = db.query(NewsArticle).filter(NewsArticle.created_at >= today).count()
 
         # 清理统计
         cleanup_stats = get_cleanup_stats(db)
+
+        # 调度器状态
+        from scheduler import get_scheduler_status
+        scheduler_status = get_scheduler_status()
 
         ctx = _build_page_context(
             request,
@@ -795,6 +861,7 @@ def admin_page(request: Request):
             total_sources=total_sources,
             today_total=today_total,
             cleanup_stats=cleanup_stats,
+            scheduler_status=scheduler_status,
         )
         return templates.TemplateResponse(request=request, name="admin.html", context=ctx)
     finally:
@@ -850,6 +917,25 @@ def api_admin_stats(request: Request):
         }
     finally:
         db.close()
+
+
+@app.get("/api/admin/scheduler-status")
+def api_admin_scheduler_status(request: Request):
+    """获取调度器状态（仅管理员）"""
+    user = _require_admin(request)
+    from scheduler import get_scheduler_status
+    return get_scheduler_status()
+
+
+@app.post("/api/admin/trigger-crawl")
+def api_admin_trigger_crawl_v2(request: Request):
+    """手动触发一次完整爬取（仅管理员）"""
+    user = _require_admin(request)
+    import threading
+    from scheduler import _do_crawl
+    thread = threading.Thread(target=_do_crawl, daemon=True)
+    thread.start()
+    return {"status": "ok", "message": "爬取任务已启动，请稍候查看结果"}
 
 
 if __name__ == "__main__":

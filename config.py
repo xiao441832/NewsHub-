@@ -13,7 +13,8 @@ MIMO_MODEL = "mimo-v2.5-pro"
 # === Crawler ===
 CRAWL_INTERVAL_HOURS = 4
 MAX_ARTICLES_PER_SOURCE = 20
-REQUEST_TIMEOUT = 10
+REQUEST_TIMEOUT = 15
+REQUEST_TIMEOUT_SCRAPE = 20  # 网页抓取超时更长
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 # === Web Server ===
@@ -53,6 +54,13 @@ NEWS_SOURCES = [
     {"name": "人民网·财经", "url": "http://www.people.com.cn/rss/finance.xml", "type": "rss", "lang": "zh", "category": "finance", "content_selector": ".rm_txt_con"},
     {"name": "人民网·军事", "url": "http://www.people.com.cn/rss/military.xml", "type": "rss", "lang": "zh", "category": "military", "content_selector": ".rm_txt_con"},
     {"name": "人民网·体育", "url": "http://www.people.com.cn/rss/sports.xml", "type": "rss", "lang": "zh", "category": "sports", "content_selector": ".rm_txt_con"},
+
+    # ─── 中国新闻网 (RSS) ───
+    {"name": "中新网·国内", "url": "http://www.chinanews.com/rss/china.xml", "type": "rss", "lang": "zh", "category": "china", "content_selector": ".left_zw"},
+    {"name": "中新网·国际", "url": "http://www.chinanews.com/rss/world.xml", "type": "rss", "lang": "zh", "category": "international", "content_selector": ".left_zw"},
+    {"name": "中新网·财经", "url": "http://www.chinanews.com/rss/finance.xml", "type": "rss", "lang": "zh", "category": "finance", "content_selector": ".left_zw"},
+    {"name": "中新网·体育", "url": "http://www.chinanews.com/rss/sports.xml", "type": "rss", "lang": "zh", "category": "sports", "content_selector": ".left_zw"},
+    {"name": "中新网·滚动", "url": "https://www.chinanews.com.cn/", "type": "web_scrape", "lang": "zh", "category": "china", "scraper": "chinanews_scroll", "content_selector": ".left_zw"},
 
     # ─── 新浪新闻 (JSON API) ───
     {"name": "新浪·国内",   "url": "https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=2516&k=&num=30&page=1", "type": "sina_json", "lang": "zh", "category": "china", "content_selector": "#artibody"},
@@ -105,12 +113,12 @@ NEWS_SOURCES = [
     # ─── NHK World (RSS) ───
     {"name": "NHK World",  "url": "https://www3.nhk.or.jp/rss/news/cat0.xml", "type": "rss", "lang": "en", "category": "international", "content_selector": ".content-body"},
 
-    # ─── 韩国先驱报 (RSS) ───
-    {"name": "韩国先驱报", "url": "http://www.koreaherald.com/rss/020200000000.xml", "type": "rss", "lang": "en", "category": "international", "content_selector": ".article-body"},
+    # ─── 观察者网 (Web Scrape) ───
+    {"name": "观察者网", "url": "https://www.guancha.cn/", "type": "web_scrape", "lang": "zh", "category": "china", "scraper": "guancha", "content_selector": ".article-content"},
 
     # ─── 网页抓取源 ───
     {"name": "新华网",     "url": "http://www.news.cn/", "type": "web_scrape", "lang": "zh", "category": "china", "scraper": "xinhua", "content_selector": "#detail"},
-    {"name": "环球网",     "url": "https://www.huanqiu.com/", "type": "web_scrape", "lang": "zh", "category": "international", "scraper": "huanqiu", "content_selector": ".article-content"},
+    {"name": "新京报",     "url": "https://www.bjnews.com.cn/", "type": "web_scrape", "lang": "zh", "category": "society", "scraper": "bjnews", "content_selector": ".article-content"},
     {"name": "光明网",     "url": "https://www.gmw.cn/", "type": "web_scrape", "lang": "zh", "category": "china", "scraper": "gmw", "content_selector": "#articleContent"},
     {"name": "央广网",     "url": "https://www.cnr.cn/", "type": "web_scrape", "lang": "zh", "category": "china", "scraper": "cnr", "content_selector": ".text_con"},
     {"name": "百度新闻",   "url": "https://news.baidu.com/", "type": "web_scrape", "lang": "zh", "category": "other", "scraper": "baidu"},
@@ -121,7 +129,7 @@ NEWS_SOURCES = [
     {"name": "Yahoo Japan", "url": "https://news.yahoo.co.jp/", "type": "web_scrape", "lang": "ja", "category": "international", "scraper": "yahoojp", "content_selector": ".article_body"},
 
     # ─── 新增网页抓取源 ───
-    {"name": "虎嗅",       "url": "https://www.huxiu.com/", "type": "web_scrape", "lang": "zh", "category": "tech", "scraper": "huxiu", "content_selector": ".article-content-wrap"},
+    {"name": "网易新闻",   "url": "https://www.163.com/", "type": "web_scrape", "lang": "zh", "category": "china", "scraper": "163", "content_selector": ".post_body"},
     {"name": "界面新闻",   "url": "https://www.jiemian.com/", "type": "web_scrape", "lang": "zh", "category": "finance", "scraper": "jiemian", "content_selector": ".article-content"},
     {"name": "财联社",     "url": "https://www.cls.cn/", "type": "web_scrape", "lang": "zh", "category": "finance", "scraper": "cls", "content_selector": ".detail-content"},
     {"name": "第一财经",   "url": "https://www.yicai.com/", "type": "web_scrape", "lang": "zh", "category": "finance", "scraper": "yicai", "content_selector": ".m-text"},

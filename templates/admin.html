@@ -85,12 +85,16 @@
                             <div class="flex items-center gap-2">
                                 {% if not src.enabled %}
                                 <span class="text-slate-500">⚫</span>
-                                {% elif src.last_status == 'success' %}
+                                {% elif src.last_status == 'success' and src.article_count > 0 %}
                                 <span class="text-green-400">🟢</span>
+                                {% elif src.last_status == 'success' %}
+                                <span class="text-blue-400">🔵</span>
+                                {% elif src.last_status == 'empty' %}
+                                <span class="text-yellow-400">🟡</span>
                                 {% elif src.last_status == 'error' %}
                                 <span class="text-red-400">🔴</span>
                                 {% else %}
-                                <span class="text-yellow-400">🟡</span>
+                                <span class="text-slate-500">⚪</span>
                                 {% endif %}
                                 <span class="{% if not src.enabled %}text-slate-500{% else %}text-white{% endif %}">
                                     {{ src.name }}
@@ -102,19 +106,23 @@
                         <td class="py-2 px-3 text-center text-white">{{ src.article_count }}</td>
                         <td class="py-2 px-3 text-center">
                             {% if src.today_count > 0 %}
-                            <span class="text-green-400">+{{ src.today_count }}</span>
+                            <span class="text-green-400 font-medium">+{{ src.today_count }}</span>
                             {% else %}
                             <span class="text-slate-500">0</span>
                             {% endif %}
                         </td>
                         <td class="py-2 px-3 text-slate-400">{{ src.last_crawled_at }}</td>
                         <td class="py-2 px-3 text-center">
-                            {% if src.last_status == 'success' %}
-                            <span class="badge bg-green-900 text-green-300">成功</span>
+                            {% if src.last_status == 'success' and src.article_count > 0 %}
+                            <span class="badge bg-green-900 text-green-300">正常</span>
+                            {% elif src.last_status == 'success' %}
+                            <span class="badge bg-blue-900 text-blue-300">成功(无数据)</span>
+                            {% elif src.last_status == 'empty' %}
+                            <span class="badge bg-yellow-900 text-yellow-300">空结果</span>
                             {% elif src.last_status == 'error' %}
                             <span class="badge bg-red-900 text-red-300" title="{{ src.last_error }}">失败</span>
                             {% else %}
-                            <span class="badge bg-slate-700 text-slate-400">未知</span>
+                            <span class="badge bg-slate-700 text-slate-400">未爬取</span>
                             {% endif %}
                         </td>
                     </tr>

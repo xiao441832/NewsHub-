@@ -12,6 +12,7 @@
     <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
     <link rel="manifest" href="/static/manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         :root {
             --bg-primary: #0f172a; --bg-secondary: #1e293b; --bg-card: #1e293b;
@@ -24,7 +25,8 @@
             --border: #e2e8f0; --accent: #2563eb;
         }
         body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; transition: background 0.3s, color 0.3s; }
-        .article-content { line-height: 1.8; font-size: 16px; }
+        .article-content { line-height: 1.8; font-size: 15px; }
+        @media (min-width: 768px) { .article-content { font-size: 16px; } }
         .article-content p { margin-bottom: 1em; }
         .article-content img { max-width: 100%; border-radius: 8px; margin: 1em 0; }
         .article-content h1, .article-content h2, .article-content h3,
@@ -117,6 +119,82 @@
         </div>
     </div>
 
+    <!-- Share Modal / Drawer -->
+    <div id="share-modal" class="fixed inset-0 z-50 hidden">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-black/50" onclick="closeShare()"></div>
+        <!-- Content: mobile bottom drawer, desktop centered modal -->
+        <div class="absolute bottom-0 left-0 right-0 md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:max-w-sm md:w-full">
+            <div class="bg-slate-800 rounded-t-2xl md:rounded-2xl p-5 pb-8 md:pb-5 max-h-[80vh] overflow-y-auto">
+                <!-- Header -->
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-white font-semibold text-base">分享到</h3>
+                    <button onclick="closeShare()" class="text-slate-400 hover:text-white text-xl leading-none px-2">&times;</button>
+                </div>
+
+                <!-- Native Share (if supported) -->
+                <button id="native-share-btn" onclick="doNativeShare()" class="hidden w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl mb-4 flex items-center justify-center gap-2 text-sm font-medium">
+                    <span>📲</span> 系统分享
+                </button>
+
+                <!-- Platform Grid -->
+                <div class="grid grid-cols-4 gap-3 mb-4" id="share-platforms">
+                    <button onclick="shareToWeibo()" class="flex flex-col items-center gap-1.5 group">
+                        <div class="w-11 h-11 rounded-full bg-red-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">🔴</div>
+                        <span class="text-[11px] text-slate-400">微博</span>
+                    </button>
+                    <button onclick="shareToTwitter()" class="flex flex-col items-center gap-1.5 group">
+                        <div class="w-11 h-11 rounded-full bg-slate-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">𝕏</div>
+                        <span class="text-[11px] text-slate-400">Twitter</span>
+                    </button>
+                    <button onclick="shareToFacebook()" class="flex flex-col items-center gap-1.5 group">
+                        <div class="w-11 h-11 rounded-full bg-blue-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">📘</div>
+                        <span class="text-[11px] text-slate-400">Facebook</span>
+                    </button>
+                    <button onclick="shareToTelegram()" class="flex flex-col items-center gap-1.5 group">
+                        <div class="w-11 h-11 rounded-full bg-sky-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">✈️</div>
+                        <span class="text-[11px] text-slate-400">Telegram</span>
+                    </button>
+                    <button onclick="shareToWhatsApp()" class="flex flex-col items-center gap-1.5 group">
+                        <div class="w-11 h-11 rounded-full bg-green-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">💬</div>
+                        <span class="text-[11px] text-slate-400">WhatsApp</span>
+                    </button>
+                    <button onclick="shareByEmail()" class="flex flex-col items-center gap-1.5 group">
+                        <div class="w-11 h-11 rounded-full bg-amber-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">✉️</div>
+                        <span class="text-[11px] text-slate-400">邮件</span>
+                    </button>
+                    <button onclick="shareBySMS()" class="flex flex-col items-center gap-1.5 group">
+                        <div class="w-11 h-11 rounded-full bg-emerald-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">💬</div>
+                        <span class="text-[11px] text-slate-400">短信</span>
+                    </button>
+                    <button onclick="toggleQRCode()" class="flex flex-col items-center gap-1.5 group">
+                        <div class="w-11 h-11 rounded-full bg-purple-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">📱</div>
+                        <span class="text-[11px] text-slate-400">二维码</span>
+                    </button>
+                </div>
+
+                <!-- QR Code (hidden by default) -->
+                <div id="qrcode-section" class="hidden mb-4 text-center">
+                    <div id="qrcode" class="inline-block p-3 bg-white rounded-xl"></div>
+                    <p class="text-slate-400 text-xs mt-2">微信扫码分享</p>
+                </div>
+
+                <!-- Copy Link -->
+                <button onclick="copyShareLink()" class="w-full bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-xl flex items-center justify-center gap-2 text-sm mb-3 transition-colors">
+                    <span>📋</span> <span id="copy-btn-text">复制链接</span>
+                </button>
+
+                <!-- Cancel (mobile) -->
+                <button onclick="closeShare()" class="w-full md:hidden text-slate-400 hover:text-white py-2 text-sm mt-1">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed top-20 left-1/2 -translate-x-1/2 z-[70] bg-slate-700 text-white px-5 py-2.5 rounded-xl shadow-2xl text-sm hidden transition-all duration-300 opacity-0 translate-y-2">
+        <span id="toast-text"></span>
+    </div>
+
     <div class="max-w-7xl mx-auto px-4 py-6 flex gap-6">
         <!-- Sidebar -->
         <aside class="w-56 flex-shrink-0 hidden lg:block">
@@ -175,16 +253,21 @@
                             {{ cat_icons.get(article.category, '📋') }} {{ categories.get(article.category, '其他') }}
                         </span>
                         {% if article.published_at %}
-                        <span class="text-sm text-slate-500">{{ article.published_at }}</span>
+                        <span class="text-sm text-slate-500 relative-time" data-time="{{ article.published_at }}">{{ article.published_at }}</span>
+                        {% else %}
+                        <span class="text-sm text-slate-600">时间未知</span>
                         {% endif %}
                     </div>
 
                     <div class="flex items-start gap-3 mb-4">
                         <h1 class="text-2xl md:text-3xl font-bold text-white flex-1">{{ article.title }}</h1>
-                        <button onclick="toggleFavorite({{ article.id }}, this)" id="fav-btn" class="text-2xl text-slate-500 hover:text-yellow-400 flex-shrink-0" title="收藏">☆</button>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <button onclick="toggleFavorite({{ article.id }}, this)" id="fav-btn" class="text-2xl text-slate-500 hover:text-yellow-400" title="收藏">☆</button>
+                            <button onclick="openShare('{{ article.title | e }}', '/article/{{ article.id }}')" class="text-2xl text-slate-500 hover:text-blue-400" title="分享">📤</button>
+                        </div>
                     </div>
 
-                    {% if article.summary %}
+                    {% if article.summary and article.summary != article.title %}
                     <div class="bg-slate-800 border-l-4 border-blue-500 rounded-r-lg p-4 mb-6">
                         <p class="text-slate-300 text-sm leading-relaxed">{{ article.summary }}</p>
                     </div>
@@ -192,13 +275,13 @@
                 </div>
 
                 {% if article.content %}
-                <div class="bg-slate-800 rounded-xl p-6 md:p-8">
+                <div class="bg-slate-800 rounded-xl p-4 md:p-8">
                     <div class="article-content text-slate-300">
                         {{ article.content | safe }}
                     </div>
                 </div>
                 {% elif article.summary %}
-                <div class="bg-slate-800 rounded-xl p-6 md:p-8">
+                <div class="bg-slate-800 rounded-xl p-4 md:p-8">
                     <div class="article-content text-slate-300">
                         <p>{{ article.summary }}</p>
                     </div>
@@ -229,6 +312,24 @@
 
             <!-- Comments Section -->
             <div class="mt-8 bg-slate-800 rounded-xl p-6">
+
+            <!-- 移动端相关推荐（桌面端在侧边栏） -->
+            {% if related %}
+            <div class="mt-6 bg-slate-800 rounded-xl p-4 lg:hidden">
+                <h3 class="text-sm font-semibold text-slate-400 mb-3">📖 相关推荐</h3>
+                <div class="grid grid-cols-1 gap-2">
+                    {% for r in related %}
+                    <a href="/article/{{ r.id }}" class="related-card rounded-lg p-3 flex gap-3">
+                        <div class="flex-1 min-w-0">
+                            <p class="text-sm text-slate-300 line-clamp-2">{{ r.title }}</p>
+                            <p class="text-xs text-slate-500 mt-1">{{ r.source }}</p>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
                 <h3 class="text-lg font-bold text-white mb-4">评论 ({{ comments|length }})</h3>
 
                 {% if user %}
@@ -388,7 +489,30 @@
     }
     restoreFavorite();
 
-    // ═══ 阅读历史已由后端自动记录（打开详情页即记录）══
+    // ═══ 相对时间（P1-7）═══
+    function formatRelativeTime(dateStr) {
+        if (!dateStr) return '';
+        var clean = dateStr.replace(/^(更新|收藏于|阅读于)[:：]?\s*/, '');
+        var d = new Date(clean.replace(/-/g, '/'));
+        if (isNaN(d.getTime())) return dateStr;
+        var now = new Date(), diff = (now - d) / 1000;
+        if (diff < 0) return '刚刚';
+        if (diff < 60) return '刚刚';
+        if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+        if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+        if (diff < 172800) return '昨天';
+        if (diff < 604800) return Math.floor(diff / 86400) + '天前';
+        return (d.getMonth()+1) + '-' + d.getDate();
+    }
+    document.querySelectorAll('.relative-time').forEach(function(el) {
+        var raw = el.dataset.time;
+        if (!raw) return;
+        var t = formatRelativeTime(raw);
+        var prefix = el.textContent.match(/^(更新|收藏于|阅读于)[:：]?\s*/);
+        el.textContent = (prefix ? prefix[0] : '') + t;
+    });
+
+    // ═══ 阅读历史已由后端自动记录（打开详情页即记录）═══
 
     // ═══ 评论 ═══
     async function postComment() {
@@ -460,6 +584,144 @@
     }
 
     if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/static/sw.js').catch(function(){}); }
+
+    // ═══════════════ Share Functionality ═══════════════
+    var _shareTitle = '', _shareUrl = '';
+    var _qrcodeInstance = null;
+
+    function openShare(title, path) {
+        _shareTitle = title || 'NewsHub 新闻';
+        _shareUrl = window.location.origin + path;
+        document.getElementById('share-modal').classList.remove('hidden');
+        document.getElementById('qrcode-section').classList.add('hidden');
+        document.getElementById('copy-btn-text').textContent = '复制链接';
+        // Show native share button if supported
+        var nativeBtn = document.getElementById('native-share-btn');
+        if (navigator.share) {
+            nativeBtn.classList.remove('hidden');
+            nativeBtn.classList.add('flex');
+        } else {
+            nativeBtn.classList.add('hidden');
+            nativeBtn.classList.remove('flex');
+        }
+    }
+
+    function closeShare() {
+        document.getElementById('share-modal').classList.add('hidden');
+    }
+
+    function doNativeShare() {
+        if (!navigator.share) return;
+        navigator.share({
+            title: _shareTitle,
+            text: _shareTitle.substring(0, 100),
+            url: _shareUrl
+        }).then(function() { closeShare(); }).catch(function() {});
+    }
+
+    function _openShareWindow(url) {
+        window.open(url, '_blank', 'width=600,height=500,noopener,noreferrer');
+        closeShare();
+    }
+
+    function shareToWeibo() {
+        var u = 'https://service.weibo.com/share/share.php?url=' + encodeURIComponent(_shareUrl) + '&title=' + encodeURIComponent(_shareTitle);
+        _openShareWindow(u);
+    }
+
+    function shareToTwitter() {
+        var u = 'https://twitter.com/intent/tweet?url=' + encodeURIComponent(_shareUrl) + '&text=' + encodeURIComponent(_shareTitle);
+        _openShareWindow(u);
+    }
+
+    function shareToFacebook() {
+        var u = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(_shareUrl);
+        _openShareWindow(u);
+    }
+
+    function shareToTelegram() {
+        var u = 'https://t.me/share/url?url=' + encodeURIComponent(_shareUrl) + '&text=' + encodeURIComponent(_shareTitle);
+        _openShareWindow(u);
+    }
+
+    function shareToWhatsApp() {
+        var u = 'https://wa.me/?text=' + encodeURIComponent(_shareTitle + ' ' + _shareUrl);
+        _openShareWindow(u);
+    }
+
+    function shareByEmail() {
+        var subject = encodeURIComponent(_shareTitle);
+        var body = encodeURIComponent(_shareTitle + '\n' + _shareUrl);
+        window.location.href = 'mailto:?subject=' + subject + '&body=' + body;
+        closeShare();
+    }
+
+    function shareBySMS() {
+        var body = encodeURIComponent(_shareTitle + ' ' + _shareUrl);
+        window.location.href = 'sms:?body=' + body;
+        closeShare();
+    }
+
+    function copyShareLink() {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(_shareUrl).then(function() {
+                showToast('已复制链接到剪贴板');
+                document.getElementById('copy-btn-text').textContent = '已复制 ✓';
+            }).catch(function() {
+                _fallbackCopy();
+            });
+        } else {
+            _fallbackCopy();
+        }
+    }
+
+    function _fallbackCopy() {
+        var input = document.createElement('input');
+        input.value = _shareUrl;
+        document.body.appendChild(input);
+        input.select();
+        try {
+            document.execCommand('copy');
+            showToast('已复制链接到剪贴板');
+            document.getElementById('copy-btn-text').textContent = '已复制 ✓';
+        } catch(e) {
+            showToast('复制失败，请手动复制');
+        }
+        document.body.removeChild(input);
+    }
+
+    function toggleQRCode() {
+        var section = document.getElementById('qrcode-section');
+        var isHidden = section.classList.contains('hidden');
+        section.classList.toggle('hidden');
+        if (isHidden) {
+            var container = document.getElementById('qrcode');
+            container.innerHTML = '';
+            _qrcodeInstance = new QRCode(container, {
+                text: _shareUrl,
+                width: 200,
+                height: 200,
+                colorDark: '#1e293b',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
+    }
+
+    function showToast(msg) {
+        var toast = document.getElementById('toast');
+        var text = document.getElementById('toast-text');
+        text.textContent = msg;
+        toast.classList.remove('hidden');
+        toast.offsetHeight;
+        toast.classList.remove('opacity-0', 'translate-y-2');
+        toast.classList.add('opacity-100', 'translate-y-0');
+        setTimeout(function() {
+            toast.classList.remove('opacity-100', 'translate-y-0');
+            toast.classList.add('opacity-0', 'translate-y-2');
+            setTimeout(function() { toast.classList.add('hidden'); }, 300);
+        }, 2000);
+    }
     </script>
 </body>
 </html>

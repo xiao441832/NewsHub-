@@ -37,7 +37,7 @@
                 <h3 class="text-white font-semibold mb-2 hover:text-blue-400 line-clamp-2">{{ fav.article.title }}</h3>
             </a>
             <div class="flex items-center justify-between mt-2">
-                <span class="text-xs text-slate-500">收藏于 {{ fav.created_at }}</span>
+                <span class="text-xs text-slate-500 relative-time" data-time="{{ fav.created_at }}">收藏于 {{ fav.created_at }}</span>
                 <button onclick="removeFavorite({{ fav.article.id }})" class="text-yellow-400 hover:text-slate-500 text-lg" title="取消收藏">★</button>
             </div>
         </div>
@@ -125,5 +125,27 @@ async function removeFavorite(articleId) {
         alert('操作失败，请稍后重试');
     }
 }
+// ═══ 相对时间（P1-7）═══
+function formatRelativeTime(dateStr) {
+    if (!dateStr) return '';
+    var clean = dateStr.replace(/^(更新|收藏于|阅读于)[:：]?\s*/, '');
+    var d = new Date(clean.replace(/-/g, '/'));
+    if (isNaN(d.getTime())) return dateStr;
+    var now = new Date(), diff = (now - d) / 1000;
+    if (diff < 0) return '刚刚';
+    if (diff < 60) return '刚刚';
+    if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+    if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+    if (diff < 172800) return '昨天';
+    if (diff < 604800) return Math.floor(diff / 86400) + '天前';
+    return (d.getMonth()+1) + '-' + d.getDate();
+}
+document.querySelectorAll('.relative-time').forEach(function(el) {
+    var raw = el.dataset.time;
+    if (!raw) return;
+    var t = formatRelativeTime(raw);
+    var prefix = el.textContent.match(/^(更新|收藏于|阅读于)[:：]?\s*/);
+    el.textContent = (prefix ? prefix[0] : '') + t;
+});
 </script>
 {% endblock %}

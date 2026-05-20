@@ -3,6 +3,38 @@ from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, func
 from sqlalchemy.orm import relationship
 from database import Base
+import re
+
+# 垃圾摘要特征 — 匹配任意一个就认为是无效摘要
+_JUNK_SUMMARY_PATTERNS = re.compile(
+    r'(主管主办|提供全天候|打造了|成立于|创办于|隶属于|是.*旗下|'
+    r'宗旨是|致力于|立足于|面向.*读者|本报.*讯|'
+    r'版权所有|未经授权|转载请注明|关注.*公众号|'
+    r'免责声明|广告合作|商务合作|联系我们|'
+    r'由人民日报社|由新华社|由中央|全媒体|'
+    r'集团旗下的|中国最大的|官方网站|'
+    r'暂无摘要|暂无内容|无标题|'
+    r'点击查看|了解更多|详情请|'
+    r'ICP备|京公网安备|网络视听许可证)',
+    re.IGNORECASE,
+)
+
+
+def _clean_summary(summary: str, title: str = "") -> str:
+    """清洗摘要：过滤垃圾摘要，标题相同时返回空"""
+    if not summary:
+        return ""
+    s = summary.strip()
+    # 标题=摘要 → 空
+    if title and s == title.strip():
+        return ""
+    # 垃圾摘要 → 空
+    if _JUNK_SUMMARY_PATTERNS.search(s):
+        return ""
+    # 太短无意义
+    if len(s) < 10:
+        return ""
+    return s
 
 
 class NewsArticle(Base):
@@ -29,7 +61,7 @@ class NewsArticle(Base):
             "source": self.source,
             "category": self.category,
             "tags": self.tags or "",
-            "summary": self.summary,
+            "summary": _clean_summary(self.summary or "", self.title or ""),
             "image_url": self.image_url or "",
             "published_at": self.published_at.strftime("%Y-%m-%d %H:%M") if self.published_at else "",
         }
